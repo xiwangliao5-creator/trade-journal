@@ -539,8 +539,72 @@ function paAnalysis(r, ks, entryMs){
     if(/多头动能|看涨吞没|长下影/.test(pattern)){ score-=1; cons.push('K线偏多'); }
   }
   if(sweep){ score+=2; pros.push('流动性扫荡后反转（假破位）'); }
+  // ===== ICT / 聪明钱（SMC）增强 =====
+  const smcTxt = [];
+  // 1) FVG 公平价值缺口：三根K线，首尾影线不重叠即成缺口
+  let fvgHit = null;
+  for(let i=2;i<look.length-2;i++){
+    const a=look[i-1], c=look[i+1];
+    if(c.l>a.h){
+      const gap=[a.h,c.l];
+      const fresh=!look.slice(i+2).some(k=>k.l<=gap[1]);
+      if(r.entry>=gap[0]&&r.entry<=gap[1]) fvgHit={dir:'看涨',gap,fresh};
+    }
+    if(c.h<a.l){
+      const gap=[c.h,a.l];
+      const fresh=!look.slice(i+2).some(k=>k.h>=gap[0]);
+      if(r.entry>=gap[0]&&r.entry<=gap[1]) fvgHit={dir:'看跌',gap,fresh};
+    }
+  }
+  if(fvgHit){
+    const ok=(long&&fvgHit.dir==='看涨')||(!long&&fvgHit.dir==='看跌');
+    smcTxt.push('FVG: '+fvgHit.dir+'缺口 '+fvgHit.gap[0]+'~'+fvgHit.gap[1]+(fvgHit.fresh?'（未回补）':'（已部分回补）'));
+    if(ok){ score+=2; pros.push('入场于'+(fvgHit.fresh?'未回补 ':'')+'FVG（公允价值缺口回踩，ICT 标准入场）'); }
+    else { score-=1; cons.push('入场于逆向 FVG 内'); }
+  }
+  // 2) 订单块 OB：强位移前的最后一根反向动能K，入场价正打在块上=聪明钱成本区
+  let obHit = null;
+  for(let i=3;i<look.length-1;i++){
+    const b=look[i];
+    const body=Math.abs(b.c-b.o), rng=(b.h-b.l)||1e-9;
+    if(body<0.7*rng) continue;
+    const mv=(b.c-b.o)/b.o*100;
+    if(mv<=-0.35 && look.slice(i+1,i+4).some(k=>k.c>b.h)) obHit={type:'看涨OB', lo:b.l, hi:b.h};
+    if(mv>=0.35 && look.slice(i+1,i+4).some(k=>k.c<b.l)) obHit={type:'看跌OB', lo:b.l, hi:b.h};
+  }
+  if(obHit){
+    const inOB = r.entry>=obHit.lo*0.9985 && r.entry<=obHit.hi*1.0015;
+    smcTxt.push(obHit.type+' '+obHit.lo.toFixed(4)+'~'+obHit.hi.toFixed(4)+(inOB?'（入场正落在块内）':''));
+    const ok=(long&&obHit.type==='看涨OB')||(!long&&obHit.type==='看跌OB');
+    if(inOB&&ok){ score+=2; pros.push('入场正打在订单块（OB）上——聪明钱成本区，ICT 高质量入场'); }
+    else if(inOB&&!ok){ score-=1; cons.push('入场在逆向订单块内（对手盘成本区）'); }
+  }
+  // 3) BOS/CHoCH：入场前 12h 内是否发生结构破坏，方向与做单方向的关系
+  let bosTxt = null;
+  const recentWin = look.filter(k=>k.t>=entryMs-12*3600e3);
+  if(lastSH && lastSL){
+    const brokeUp=recentWin.some(k=>k.c>lastSH.p);
+    const brokeDn=recentWin.some(k=>k.c<lastSL.p);
+    const dupBreak=/突破前高|跌破入场/.test(levelTxt);
+    if(brokeUp&&long){ bosTxt='向上BOS（多头结构确认）'; if(!dupBreak){ score+=2; pros.push('入场前刚发生向上 BOS（结构破坏确认多头）'); } }
+    else if(brokeDn&&!long){ bosTxt='向下BOS（空头结构确认）'; if(!dupBreak){ score+=2; pros.push('入场前刚发生向下 BOS（结构破坏确认空头）'); } }
+    else if(brokeDn&&long){ score-=2; cons.push('入场前刚向下破结构（CHoCH 转空却做多）'); bosTxt='向下CHoCH（结构转空后做多）'; }
+    else if(brokeUp&&!long){ score-=2; cons.push('入场前刚向上破结构（CHoCH 转多却做空）'); bosTxt='向上CHoCH（结构转多后做空）'; }
+    if(bosTxt) smcTxt.push(bosTxt);
+  }
+  // 4) Premium/Discount：入场价在近期波动区间的位置（EQ=50%）
+  const winHigh=Math.max.apply(null,look.map(k=>k.h)), winLow=Math.min.apply(null,look.map(k=>k.l));
+  const posIn=(r.entry-winLow)/((winHigh-winLow)||1e-9);
+  smcTxt.push('区间位置 '+Math.round(posIn*100)+'%（EQ=50%，区间 '+winLow+'~'+winHigh+'）');
+  if(long){
+    if(posIn<=0.4){ score+=1; pros.push('折价区（Discount）开多——聪明钱在区间下半区买入'); }
+    else if(posIn>0.7){ score-=1; cons.push('溢价区（Premium）开多——追在区间上半区'); }
+  } else {
+    if(posIn>=0.6){ score+=1; pros.push('溢价区（Premium）开空——聪明钱在区间上半区卖出'); }
+    else if(posIn<0.3){ score-=1; cons.push('折价区（Discount）开空——杀在区间下半区'); }
+  }
   const level = score>=2 ? '好' : (score<=-2 ? '差' : '一般');
-  return {trend, aligned, against, levelTxt, sweep, pattern, level, pros, cons};
+  return {trend, aligned, against, levelTxt, sweep, pattern, level, pros, cons, smc: smcTxt.join(' · ')};
 }
 function verdictText(r, e, x, pa){
   if(!e) return '数据不足，无法判定（需填开仓价）';
@@ -576,6 +640,7 @@ function marketCard(r, i, e, x, err, pa){
       lines += `<p style="font-size:13px;line-height:1.7">PA 分析：结构 ${esc(pa.trend)}${pa.aligned?' · 顺势':''}${pa.against?' · ⚠️逆势':''} · ${esc(pa.levelTxt)}<br>
         入场K线：${esc(pa.pattern)}${pa.sweep?' · 刚完成流动性扫荡反转（假破位，好信号）':''}
         <span class="badge" style="${bcolor(pa.level)}">PA ${pa.level}</span>
+        ${pa.smc?'<br>SMC/ICT：'+esc(pa.smc):''}
         ${pa.pros.length?'<br>加分：'+esc(pa.pros.join('、')):''}${pa.cons.length?'<br>扣分：'+esc(pa.cons.join('、')):''}</p>`;
     }
     if(x){
