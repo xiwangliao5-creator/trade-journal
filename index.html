@@ -229,6 +229,16 @@
       <p class="hint">导出的 JSON 可直接发给我，我基于全部历史数据做整体诊断。清空操作不可恢复，请先导出备份。</p>
     </div>
     <div class="card">
+      <h2>① 发截图给小沃（点按钮复制指令）</h2>
+      <p class="hint">截图发到和小沃的<b>对话窗口</b>（不是这个网页）——发图时把下面的指令一起粘上，小沃收到会自动识别字段、跑盘面验证 + PA 分析、给逐笔结论，并回你一段导入数据。</p>
+      <textarea id="cmd-template" readonly style="width:100%;min-height:110px;font-size:13px">【交易复盘请求】
+下面是 Gate 订单截图，请帮我：
+1. 识别全部字段（品种/方向/杠杆/开仓价/平仓价/数量/手续费/开平仓时间/盈亏）
+2. 用 Gate 行情跑盘面验证 + PA 分析，逐笔给结论（过程正确/运气单/双错等）
+3. 最后回我一段「导入 JSON」，我粘进工具的 AI 截图导入框</textarea>
+      <div class="formrow"><button class="btn-primary" id="btn-copy-cmd">复制指令</button></div>
+    </div>
+    <div class="card">
       <h2>AI 截图导入（把小沃发你的数据粘进来）</h2>
       <textarea id="ai-import-box" style="width:100%;min-height:90px" placeholder="粘贴小沃发给你的导入数据（JSON），点下面按钮自动入库；重复的记录会自动跳过，不会导两遍"></textarea>
       <div class="formrow"><button class="btn-primary" id="btn-ai-import">解析并导入</button></div>
@@ -324,6 +334,16 @@ document.getElementById('file-import').addEventListener('change',e=>{
   }catch(err){ alert('文件格式不对'); } };
   r.readAsText(f);
 });
+document.getElementById('btn-copy-cmd').addEventListener('click',()=>{
+  const ta=document.getElementById('cmd-template');
+  ta.select();
+  const done = (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(ta.value) : Promise.reject();
+  done.then(()=>{}).catch(()=>{ try{ document.execCommand('copy'); }catch(e){} });
+  const b=document.getElementById('btn-copy-cmd'); const t=b.textContent;
+  b.textContent='✅ 已复制，去对话窗口粘贴';
+  setTimeout(()=>b.textContent=t,2500);
+});
+
 document.getElementById('btn-ai-import').addEventListener('click',()=>{
   const txt = document.getElementById('ai-import-box').value.trim();
   if(!txt){ alert('先粘贴数据'); return; }
