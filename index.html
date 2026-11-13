@@ -228,6 +228,12 @@
       </div>
       <p class="hint">导出的 JSON 可直接发给我，我基于全部历史数据做整体诊断。清空操作不可恢复，请先导出备份。</p>
     </div>
+    <div class="card">
+      <h2>AI 截图导入（把小沃发你的数据粘进来）</h2>
+      <textarea id="ai-import-box" style="width:100%;min-height:90px" placeholder="粘贴小沃发给你的导入数据（JSON），点下面按钮自动入库；重复的记录会自动跳过，不会导两遍"></textarea>
+      <div class="formrow"><button class="btn-primary" id="btn-ai-import">解析并导入</button></div>
+      <p class="hint">用法：Gate 订单截图发到对话 → 小沃识别字段+盘面验证 → 回你一段导入数据 → 粘贴到这里 → 点导入 → 去「记录」页看。字段不全的（比如没填风险额）之后在记录里补，评级和 R 倍数会自动更新。</p>
+    </div>
   </div>
 </div>
 
@@ -318,6 +324,36 @@ document.getElementById('file-import').addEventListener('change',e=>{
   }catch(err){ alert('文件格式不对'); } };
   r.readAsText(f);
 });
+document.getElementById('btn-ai-import').addEventListener('click',()=>{
+  const txt = document.getElementById('ai-import-box').value.trim();
+  if(!txt){ alert('先粘贴数据'); return; }
+  let d;
+  try{ d = JSON.parse(txt); }catch(err){ alert('JSON 格式不对——确认复制的是小沃发你的完整数据（从 { 到 } 全部复制）'); return; }
+  const arr = Array.isArray(d) ? d : (Array.isArray(d.records) ? d.records : null);
+  if(!arr){ alert('数据里没有 records 记录数组'); return; }
+  const keyOf = r => [r.date,r.symbol,r.dir,r.entry,r.exit,r.timeEntry,r.timeExit,r.pnl].join('|');
+  const exist = new Set(db.records.map(keyOf));
+  let added=0, skip=0;
+  arr.forEach(r=>{
+    if(!r || !r.date || !r.symbol || r.pnl==null || isNaN(Number(r.pnl))){ skip++; return; }
+    const rec = {
+      id: Date.now()+Math.random(),
+      date: r.date, symbol: String(r.symbol).trim(), dir: (r.dir==='做空'?'做空':'做多'),
+      leverage: r.leverage||'', entry: parseFloat(r.entry), exit: parseFloat(r.exit),
+      timeEntry: r.timeEntry||'', timeExit: r.timeExit||'', size: r.size||'',
+      fee: parseFloat(r.fee)||0, risk: parseFloat(r.risk)||'', plan: r.plan||'',
+      pnl: Number(r.pnl), note: r.note||''
+    };
+    const k = keyOf(rec);
+    if(exist.has(k)){ skip++; return; }
+    exist.add(k);
+    db.records.push(rec); added++;
+  });
+  save(); render();
+  document.getElementById('ai-import-box').value='';
+  alert('导入完成：新增 '+added+' 条，跳过 '+skip+' 条（重复或字段不全）');
+});
+
 document.getElementById('btn-clear-all').addEventListener('click',()=>{
   if(confirm('⚠️ 将清空全部交易记录，且不可恢复！确认前请先导出备份。') && confirm('再次确认：真的要清空吗？')){ db={records:[],goal:null}; save(); render(); }
 });
