@@ -229,20 +229,30 @@
       <p class="hint">导出的 JSON 可直接发给我，我基于全部历史数据做整体诊断。清空操作不可恢复，请先导出备份。</p>
     </div>
     <div class="card">
-      <h2>① 发截图给小沃（点按钮复制指令）</h2>
-      <p class="hint">截图发到和小沃的<b>对话窗口</b>（不是这个网页）——发图时把下面的指令一起粘上，小沃收到会自动识别字段、跑盘面验证 + PA 分析、给逐笔结论，并回你一段导入数据。</p>
-      <textarea id="cmd-template" readonly style="width:100%;min-height:110px;font-size:13px">【交易复盘请求】
-下面是 Gate 订单截图，请帮我：
-1. 识别全部字段（品种/方向/杠杆/开仓价/平仓价/数量/手续费/开平仓时间/盈亏）
-2. 用 Gate 行情跑盘面验证 + PA 分析，逐笔给结论（过程正确/运气单/双错等）
-3. 最后回我一段「导入 JSON」，我粘进工具的 AI 截图导入框</textarea>
+      <h2>① 万能识别指令（点按钮复制）</h2>
+      <p class="hint">适用于任何能看图的 AI（小沃、豆包、ChatGPT、Kimi 均可）：把 Gate 订单<b>截图</b>和这段指令<b>一起发过去</b>，AI 会输出一段标准 JSON → 复制它 → 粘到下面 ② 的框里点导入。发给小沃的话还会额外得到盘面验证 + PA 逐笔分析。</p>
+      <textarea id="cmd-template" readonly style="width:100%;min-height:230px;font-size:13px">【Gate 合约订单截图识别】
+请识别下面这张 Gate.io 合约订单/成交记录截图，把每笔已平仓的交易提取成 JSON，严格按下面的格式和规则输出，除 JSON 外不要输出任何解释文字：
+
+{"records":[
+  {"date":"2026-11-13","symbol":"BTC","dir":"做多","leverage":"10x","entry":"97000","exit":"97500","timeEntry":"2026-11-13 08:30","timeExit":"2026-11-13 10:15","size":"0.05","fee":"2.5","risk":"","plan":"","pnl":"125","note":""}
+]}
+
+规则：
+1. date=开仓日期 YYYY-MM-DD；symbol=币种不带 USDT 后缀（如 BTC_USDT 永续写 BTC）
+2. dir 只能填「做多」或「做空」；entry/exit=开仓价/平仓价纯数字
+3. timeEntry/timeExit=开仓/平仓时间 YYYY-MM-DD HH:MM，截图上没有就填 ""
+4. size=仓位数量；fee=手续费，没有填 0；pnl=本笔盈亏纯数字，亏损为负数
+5. risk（计划风险额）和 plan（是否按计划执行）截图上没有，一律填 ""，我之后自己补
+6. 还在持仓中/未平仓的订单不要放进 records
+7. 多笔交易就在 records 数组里放多个对象，一笔一个</textarea></textarea>
       <div class="formrow"><button class="btn-primary" id="btn-copy-cmd">复制指令</button></div>
     </div>
     <div class="card">
-      <h2>AI 截图导入（把小沃发你的数据粘进来）</h2>
-      <textarea id="ai-import-box" style="width:100%;min-height:90px" placeholder="粘贴小沃发给你的导入数据（JSON），点下面按钮自动入库；重复的记录会自动跳过，不会导两遍"></textarea>
+      <h2>② 导入 AI 识别出的数据</h2>
+      <textarea id="ai-import-box" style="width:100%;min-height:90px" placeholder="粘贴任何 AI 按 ① 指令输出的 JSON，点下面按钮自动入库；重复的记录会自动跳过，不会导两遍"></textarea>
       <div class="formrow"><button class="btn-primary" id="btn-ai-import">解析并导入</button></div>
-      <p class="hint">用法：Gate 订单截图发到对话 → 小沃识别字段+盘面验证 → 回你一段导入数据 → 粘贴到这里 → 点导入 → 去「记录」页看。字段不全的（比如没填风险额）之后在记录里补，评级和 R 倍数会自动更新。</p>
+      <p class="hint">用法：截图+① 的指令发给任意 AI → AI 回你一段 JSON → 全选复制 → 粘贴到这里 → 点导入 → 去「记录」页看。字段不全的（比如没填风险额）之后在记录里补，评级和 R 倍数会自动更新。</p>
     </div>
   </div>
 </div>
